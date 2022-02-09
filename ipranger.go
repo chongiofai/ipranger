@@ -16,7 +16,7 @@ import (
 
 type IPRanger struct {
 	Np                *networkpolicy.NetworkPolicy
-	iprangerop        cidranger.Ranger
+	Op                cidranger.Ranger
 	Hosts             *hybrid.HybridMap
 	Stats             Stats
 	CoalescedHostList []*net.IPNet
@@ -29,7 +29,7 @@ func New() (*IPRanger, error) {
 	}
 	var np networkpolicy.NetworkPolicy
 
-	return &IPRanger{Np: &np, iprangerop: cidranger.NewPCTrieRanger(), Hosts: hm}, nil
+	return &IPRanger{Np: &np, Op: cidranger.NewPCTrieRanger(), Hosts: hm}, nil
 }
 
 func (ir *IPRanger) Contains(host string) bool {
@@ -40,7 +40,7 @@ func (ir *IPRanger) Contains(host string) bool {
 
 	// ip => check internal ip ranger
 	if iputil.IsIP(host) {
-		if ok, err := ir.iprangerop.Contains(net.ParseIP(host)); err == nil {
+		if ok, err := ir.Op.Contains(net.ParseIP(host)); err == nil {
 			return ok
 		}
 	}
@@ -85,7 +85,7 @@ func (ir *IPRanger) add(host string) error {
 
 	atomic.AddUint64(&ir.Stats.IPS, mapcidr.AddressCountIpnet(network))
 
-	return ir.iprangerop.Insert(cidranger.NewBasicRangerEntry(*network))
+	return ir.Op.Insert(cidranger.NewBasicRangerEntry(*network))
 }
 
 func (ir *IPRanger) IsValid(host string) bool {
@@ -108,7 +108,7 @@ func (ir *IPRanger) delete(host string) error {
 	}
 
 	atomic.AddUint64(&ir.Stats.IPS, -mapcidr.AddressCountIpnet(network))
-	_, err := ir.iprangerop.Remove(*network)
+	_, err := ir.Op.Remove(*network)
 
 	return err
 }
@@ -165,10 +165,10 @@ func (ir *IPRanger) Shrink() error {
 	})
 	ir.CoalescedHostList, _ = mapcidr.CoalesceCIDRs(items)
 	// reset the internal ranger with the new data
-	ir.iprangerop = cidranger.NewPCTrieRanger()
+	ir.Op = cidranger.NewPCTrieRanger()
 	atomic.StoreUint64(&ir.Stats.IPS, 0)
 	for _, item := range ir.CoalescedHostList {
-		err := ir.iprangerop.Insert(cidranger.NewBasicRangerEntry(*item))
+		err := ir.Op.Insert(cidranger.NewBasicRangerEntry(*item))
 		if err != nil {
 			return err
 		}
